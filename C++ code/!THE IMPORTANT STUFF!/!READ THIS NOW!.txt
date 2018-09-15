@@ -1,0 +1,5 @@
+This folder "should" contain the final source code as it was implemented on Atlas as of the end of the 2018 competition.  
+
+The loose files in here are the most important/only ones that directly affect the Inverse Kinematics and will likely be what you are looking for.
+
+The folder called "Roveware" is all of the other code that makes everything work and directly interface with the circuit components. (reading encoders, PID controllers, communication libraries, etc) AKA the stuff Drue wrote that I only vaguely understand.

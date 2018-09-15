@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring comment="Rename resource &apos;Atlas_Arm/RoveWare-RMC_stopcaps&apos; to &apos;RoveWare&apos;" description="Rename resource &apos;RoveWare-RMC_stopcaps&apos;" flags="7" id="org.eclipse.ltk.core.refactoring.rename.resource" input="RoveWare-RMC_stopcaps" name="RoveWare" stamp="1526963090757" updateReferences="true"/>
+</session>
