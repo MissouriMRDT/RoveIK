@@ -1,0 +1,205 @@
+////////////////////////////////
+//////////Main.cpp//////////////
+////////////////////////////////
+Lines 4-26
+These lines set up some of the variables that are used to keep track of motor currents, 
+whether or not the program has been initialized, the watchdog timer, which gripper is being used, and others.  
+The only thing you might want to change here is line 14,  bool watchdogUsed = true; This turns on or off the watchdog, 
+which essentially just stops all motion of the arm if the arm does not receive any communication from RED after a certain amount of time specified 
+n mian.h (Default 1 sec). 
+
+Lines 28 - 141: Init()
+This is the initialization routine. This runs exactly once after the arm is powered on. 
+This routine starts by setting the IP address of the arm board and then configuring all the RoveMotionControl code i mentioned earlier.  
+This includes defining that the wrist joint is a differential joint, setting up current monitoring, 
+setting control deadbands and hard stop positions, configuring the encoder offsets, directions, max values, disconnect sensitivity, and 
+filtering constants. By the time this routine has finished, the arm is fully initialized with motors on and control is in open loop mode. 
+
+Lines 102-106
+Commented out, but they in theory activate the gravity compensation function which was never 100% finished and never tested.
+
+Lines 143-154: Main()
+This is the main routine which continues to run for as long as the arm is powered up.  
+All it does is call the following 4 functions over and over again until the arm is turned off., 
+    processBaseStationCommands();
+    readArmCurrents();
+    processCurrentFaults();
+    sendPeriodicTelemetry();
+
+Lines 156-176: sendPeriodicTelemetry()
+This repeatedly sends the motor current readings back to RED and sends back the current joint angles if “sendPeriodicPositions” is enabled through RED.
+
+Lines 178-364: processBaseStationCommands()
+This is where all the commands from RED are interpreted and either perform the desired function or call the proper function needed to complete that task. 
+The process names are fairly self explanatory. They mostly handle the different arm control modes, enabling/disabling joints and end effectors, 
+and enabling/disabling limit switches. Things to note in here are the two different IK control modes, IKRoverIncrement and IKWristIncrement. 
+IKRoverIncrement would command the active gripper position from the reference frame of the rover, and is what was used for competition.  
+IKWristIncrement was an attempt to enable “flying the gripper” from the perspective of the camera on the gripper, but it was never completed sucessfully.  
+There may be only 1 or 2 major things that need to be worked out to get that functionality operationsl, but i was unable to figure it all out before competition. T
+The actual IK code is later discussed in the Kinematics.cpp code.
+
+Lines 367-411: readArmCurrents()
+It does exactly what you’d expect. It reads/filters the arm motor currents from the current sensor chips.
+
+Lines 414-461: ProcessCurrentFaults()
+This just checks to see if any arm motor excedes the current limit and if it does, Notifies RED and shuts off power to that motor.  
+The MotorMaxCurrent is set to 7 amps in the Main.h file.
+
+Lines 463-481: masterPowerSet    and    allMotorsPowerSet
+The command that is called to turn on\off the main arm-board power and turs on/off all motor power respectively.
+
+Lines 485-504: stopArm()
+The command that is called to stop all closed loop movement by setting destination position to where the arm currently is and then stopping joint motion.
+
+Lines 506-597:    *joint_name*PowerSet()
+These are the functions that are called from processBaseStationCommands() whenever RED commands to enable\disable individual motors.
+
+Lines 602-707: move*joint_name*
+These are the functions that are called to move each joint in open loop mode. If the arm isn’t currently in open loop mode.
+It first switches into open loop, and then commands the motor power level.
+
+Lines 710-715: checkLimSwitch(switchPin)
+This just checks the status of the limit switch attached to the specified pin.
+
+Lines 718-798: switchTo*control_mode_name*
+These commands handle all the little steps to adjust the different RoveMotionControl components that are necessary to transition between different 
+control schemes. Open loop is drivint the arm joint by joint without angular control, IK increment allows incremental adjustment of X,Y,Z,yaw,pitch,roll
+of the gripper using the xbox controller, Closed loop enables direct control of the arm joint angles through RED.
+
+Lines 803-828: setArmDestinationAngles(angles)
+This updates the commanded joint angles to the motors when operating in cosed loop or IK modes.
+ 
+Lines 830-835: sendArmPositions()
+This sends the current positions of the joint angles back to RED
+ 
+Lines839-895: Watchdog stuff
+This is where the watchdog is initialized, periodically reset, and if triggered, turns off power to the arm board.
+ 
+Lines 899-909: getArmPositions(positions)
+This is where the current positions of the joints are read from the RoveMotionControl encoder modules.
+ 
+Lines 916-966: closedLoopUpdateHandler()
+Here, the commanded joint angles are actually updated to the PID loops that control the motors. 
+This is done by updating the desired positions of the joint modules from RoveMotionControl.
+ 
+Lines 968-989: gripperSwap()
+This swaps the active gripper for the purposes of IK calculation simply by adding a 180-degree offset to joint 5.  
+Because the grippers were mounted in line with each other but simply on opposite sides of the differential, simply flipping joint 5 by 180 degrees 
+achieves the desired gripper swap. Care was taken to ensure that the offset value never got too large, 
+so if it exceeded 360 degrees, 360 degrees were subtracted from the offset to keep the offset value reasonable.
+ 
+Lines 991-994 sysStatusUpdater()
+Not sure what this was for…
+ 
+Lines 996-1033: handleLimits(jointNumber,enable)
+This is the function that is called to either enable or disable limit switches for a specific joint depending on a message from RED.
+ 
+Main.h
+Main.h is the file which contains all the settings and definitions for main.cpp. 
+Basically, if there is some value that is calles or referenced to in main.cpp, but you cant find it ctually defined in main.cpp, 
+it is instead stored in main.h. 
+ 
+Line 124: MaxGripperPower = 500
+This sets the maximum power of the main gripper(0 to 1000). It was set to 50% because the motor used on the Atlas’ (and Gryphon’s) gripper had a 
+tendency of destroying itself if run at 100%.  You could probably use it at 60% or 70%, but I wouldn’t push it any higher than that.
+
+Lines 126 -170: Motor PID and settings
+These lines are for setting the PID parameters for the joint angle controllers. 
+This is rally the only thing you might need to adjust in this file for tuning.  
+The cotrollers are only PI controllers, but a derivative term can be added in if desired.  Kp is the proportional gain, Ki is the integral gain. 
+The Deadband is how close the joint needs to be to its target position before it stops the motor. 
+The offset angles are to offset the values of the encoders so that they actually represent the correct joint angle.  
+This was necessary because it is not possible to reliably orient the encoders so that they are in the same place every time the arm is re-assembled. 
+The HardStop positions are supposed to be the angles just before the mechanical hard stops, so the arm does not try to drive through the stops.
+ 
+////////////////////////////////////////
+//////////THE IK STUFF!!////////////////
+////////////////////////////////////////
+
+/////Introduction//////
+I havent given you an overview of how exactly the IK control scheme works yet, so I’ll do that now. The way the IK code works, 
+is that you command it a desired position and orientation of the gripper, and it calculates the required joint angles to get there. 
+That is about as simple as it gets. However, in competition, we aren’t cocerned with the arm getting to a certain position, 
+we are instead more interested in driving it around in specific directions relative to the rover.  
+So, to handle that, the code keeps track of the last commanded position/orientation, 
+and depending on how far you push the joysticks of the controller, increments that commanded position and orientation by a certain amount.  
+There is a small problem with this approach however, and that is that when moving the arm, sometimes certain joints need to move faster than 
+others to keep the gripper level and moving in a straight line.  This code doesn’t coordinate motion between different joints, each joint acts 
+independently of all the others. Instead, to get around this, we just make the increment between each position rather small, and only update the 
+increment once all joints are within a certain range of their target angle. Ok, so that’s a very basic overview. Now to the code!
+
+/////ArmModelInfo.h/////
+This file contains the Denavit-Hartenberg definitions of the arm links and offsets.  
+This is exactly the same as in the MATLAB code.  
+Be careful though, the comments suggest the angles are in degrees, but the values you enter for the angles need to be in RADIANS. 
+The distances should be entered in inches.  
+You could use mm if you so choose, just as long as you are consistent so that every length is the same unit of length.
+ 
+Lines 74-84: motor information constants
+These values were going to be used in the control scheme to convert desired torque into a command voltage for the motors for the purposes of 
+gravity compensation. All of the code is in there, but these values may need to be corrected before attempting to use it. 
+The code that needs these values is incuded in RoveMotionControl.
+ 
+/////Kinematics.cpp/////
+This is where all of the functions for the IK code are kept.  
+For most of the functions, they are exactly the same as their Matlab counterparts, just formatted correctly for C++. 
+C++ however lacks matrix math functions, so Drue wrote some simple matrix math functons which are used instead. 
+These matrix math functions are currently implemented in RoveBoard (a set of important functions required by all boards on Rover)
+ 
+Lines 12-22: setup stuff
+This is just initializing some of the variables used in this IK code.
+ 
+Lines 27-92: Supporting IK functions
+These are all the supporting MATLAB functions included in those other MATLAB files just converted into C++ for use on rover.
+ 
+Lines 94-108: handling different IK modes
+We will get to the specifics of this in a minute, but rather than have duplicates of a majority of the IK code for both RoverIK and gripperRelativeIK, 
+The main IK code (calc_IK) was modified to accept not only the position and orientation information, but 2 additional angles for the purposes of 
+gripperRelativeIK.  These two functions take the all the inputs, and simply call the calc_IK function using the appropriate arguments based on 
+which control mode is set.
+ 
+Lines 110-275: calc_IK
+This is all the IK math nearly identical to the MATLAB code. There are a number of differences not only related to the way I had to format 
+the matrix math stuff, so I will discuss only those major differences. For explanation of how the IK code works, see the MATLAB document and the 
+main Crash-course document.
+First off, you will see the function call “radians()” a lot throughout this code. That is because the calc_IK code deals with radians, 
+but all the RoveMotionControl stuff is in degrees.  This “radians()” function just converts degrees to radians.
+
+Lines 131-132
+These are the 2 new rotations introduced for the gripperRelativeIK, 
+Because the order of rotations determines the outcome, by adding these 2 rotations, we can simply use the lasr roll, yaw2, and pitch2 to 
+multipy together to get a yaw-pitch-roll transformation from the grippers perspective. More on this later.
+
+Lines 150-151
+Here are where those other rotations are actually used to calculate the desired gripper rotation matrix.
+
+Lines 184-187
+I believe this check is included in the MATLAB code to prevent the arm from “folding in” too close, 
+but the value here has been set to 10 inches because of how far the second gripper sticks out the back. 
+This helps to prevent from running the arm into itself during IK mode.
+
+Lines 195-219
+These just look weird because of how I have to handle Matrix math, but it is the same as the OpRot calculation in MATLAB.
+
+Lines 224-226
+This just helps prevent imaginary numbers in the th51 and th52 calculations. 
+It never really gets executes, but if it ever does, it will help prevent a crash. Hopefully.
+
+Lines 262-274
+These lines change the output angles of the calc_IK to ones that RoveMotionControl will accept. 
+Calc_IK outputs angles from -pi/2 to pi.2, but RoveMotionControl wants values from 0 degrees to 360 degrees. 
+These function calls just correct that and then output the correct angles.
+ 
+Lines 278-291: clac360Dist(dest,present)
+This calculates the shortest angular distance between 2 angles. 
+It is used in determining whether the joints are close to their commanded position for the purposes of IK control.
+ 
+ 
+
+
+
+ 
+
+
+
+
