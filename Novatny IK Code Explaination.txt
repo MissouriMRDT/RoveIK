@@ -90,6 +90,7 @@ so if it exceeded 360 degrees, 360 degrees were subtracted from the offset to ke
  
 Lines 991-994 sysStatusUpdater()
 Not sure what this was for…
+Drue's edit: This was for spawning a thread to perform the longer, harder number crunching on gravity compensation separate from the rest of the code, so it could update periodically but could be interrupted by quicker, more critical code. Commented out as we didn't actually use gravity compensation. 
  
 Lines 996-1033: handleLimits(jointNumber,enable)
 This is the function that is called to either enable or disable limit switches for a specific joint depending on a message from RED.
